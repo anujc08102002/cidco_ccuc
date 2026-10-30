@@ -1,0 +1,7 @@
+.env
+server/.session-secret
+server/.push-vapid.json
+node_modules/
+dist/
+
+.npm-cache/

@@ -1,0 +1,52 @@
+from pathlib import Path
+p=Path('src/components/AppShell.tsx')
+s=p.read_text(encoding='utf-8')
+s=s.replace("Menu,Moon,Search", "Menu,Moon,Keyboard,Search")
+s=s.replace("import {useDialogFocus}", "import {pageHelp} from './navigation';\nimport {useDialogFocus}")
+s=s.replace("['dashboard','Command centre'", "['dashboard','Overview'").replace("['reports','Intelligence'", "['reports','Reports & exports'").replace("['settings','Configuration'", "['settings','Settings'")
+s=s.replace("['settings','Settings',Settings]]", "['settings','Settings',Settings],['public','Public disclosure',ShieldCheck],['archived','Archived cases',Archive]]")
+s=s.replace(".has(id)).map", ".has(id)).map")
+s=s.replace(" const [rail,setRail]", " const [commandQuery,setCommandQuery]=useState(''),[help,setHelp]=useState(false);\n const helpDialog=useDialogFocus<HTMLElement>(help,()=>setHelp(false));\n const [rail,setRail]")
+s=s.replace(" const navigate=(view:View)", " const available=nav.filter(([id])=>roleNavigation[props.role].has(id)||id==='public');\n const pageResults=available.filter(([id,label])=>`${label} ${pageHelp[id].description}`.toLowerCase().includes(commandQuery.toLowerCase()));\n const navigate=(view:View)")
+s=s.replace("setNotices(false);};", "setNotices(false);setCommandQuery('');};",1)
+s=s.replace("props.search.toLowerCase()", "commandQuery.toLowerCase()")
+s=s.replace("if(e.key==='Escape'){", "if(e.altKey&&e.shiftKey){const page=available.find(([id])=>pageHelp[id].key===e.key.toLowerCase());if(page){e.preventDefault();navigate(page[0]);return;}}if(e.key==='Escape'){")
+s=s.replace("if(typing||e.ctrlKey", "if(document.querySelector('[aria-modal=\"true\"]'))return;if(typing||e.ctrlKey")
+s=s.replace("if(e.key.toLowerCase()==='n'", "if(e.key==='?'){e.preventDefault();setHelp(true);return;}if(e.key.toLowerCase()==='n'")
+s=s.replace("[props.role,props.onNew]", "[props.role,props.onNew,props.onNavigate]")
+s=s.replace('<header className="masthead">', '<a className="skip-link" href="#main-content" onClick={e=>{e.preventDefault();document.getElementById(\'main-content\')?.focus();}}>Skip to page content</a><header className="masthead">')
+s=s.replace('Search cases, properties or notices', 'Find a page, case or property')
+s=s.replace('<div className="mast-actions">', '<div className="mast-actions"><button onClick={()=>setHelp(true)} aria-label="Keyboard shortcuts and help"><Keyboard size={18}/></button>')
+s=s.replace("nav.filter(([id])=>roleNavigation[props.role].has(id)).map", "available.map")
+s=s.replace('title={label} className=', 'title={`${label} · Alt + Shift + ${pageHelp[id].key.toUpperCase()}`} aria-keyshortcuts={`Alt+Shift+${pageHelp[id].key.toUpperCase()}`} className=')
+s=s.replace("String(i+1).padStart(2,'0')", "pageHelp[id].key.toUpperCase()")
+s=s.replace('<main className="work-canvas">', '<main id="main-content" className="work-canvas" tabIndex={-1} aria-label={title}><div className="page-guidance"><span className="guidance-dot"/><p>{pageHelp[props.view].description}</p><button onClick={()=>setHelp(true)}>Keyboard help <kbd>?</kbd></button></div>')
+s=s.replace('aria-label="Search cases" value={props.search} onChange={e=>props.onSearch(e.target.value)}', 'aria-label="Find a page or case" value={commandQuery} onChange={e=>setCommandQuery(e.target.value)}')
+s=s.replace("if(e.key==='Enter')navigate('register');", "if(e.key==='Enter'){if(pageResults.length===1)navigate(pageResults[0][0]);else if(searchResults.length===1&&commandQuery){props.onOpenCase?.(searchResults[0]);setCommand(false);}else{props.onSearch(commandQuery);navigate('register');}}")
+s=s.replace('placeholder="Case, property, notice or owner…"', 'placeholder="Type a page name, case number, property or owner…"')
+s=s.replace('{props.search&&<>', '{commandQuery&&<>')
+s=s.replace("nav.filter(([id])=>roleNavigation[props.role].has(id)).slice(0,7).map", "pageResults.map")
+s=s.replace('<span><Icon size={14}/> {label}</span><ArrowRight size={13}/>', '<span><Icon size={16}/><span>{label}<small>{pageHelp[id].description}</small></span></span><kbd>Alt ⇧ {pageHelp[id].key.toUpperCase()}</kbd>')
+s=s.replace('  {notices&&', '''  {help&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setHelp(false);}}><section ref={helpDialog} className="keyboard-dialog" role="dialog" aria-modal="true" aria-labelledby="keyboard-title"><header><div><span className="section-index">YOUR WORKSPACE GUIDE</span><h2 id="keyboard-title">Every page, within reach.</h2></div><button className="action-secondary" onClick={()=>setHelp(false)} aria-label="Close keyboard help"><X size={18}/></button></header><p>Press <kbd>Tab</kbd> to move between controls, <kbd>Enter</kbd> to activate and <kbd>Esc</kbd> to close a dialog. Use arrow keys within case tabs.</p><div className="shortcut-basics"><span>Find any page or case <kbd>Ctrl / ⌘ K</kbd></span><span>Show this guide <kbd>?</kbd></span>{['master','surveyor'].includes(props.role)&&<span>Register a new case <kbd>N</kbd></span>}</div><h3>Go directly to a page</h3><p>Hold Alt + Shift and press the letter shown.</p><div className="shortcut-grid">{available.map(([id,label,Icon])=><button key={id} onClick={()=>{navigate(id);setHelp(false);}}><Icon size={17}/><span>{label}</span><kbd>{pageHelp[id].key.toUpperCase()}</kbd></button>)}</div><p className="keyboard-tip">You can also bookmark any page or case. Your access permissions still apply.</p></section></div>}
+  {notices&&''')
+s=s.replace("map(([id,label,Icon],i)=>", "map(([id,label,Icon])=>")
+p.write_text(s,encoding='utf-8')
+p=Path('src/App.tsx');s=p.read_text(encoding='utf-8')
+s=s.replace("{AppShell,type View}","{AppShell,roleNavigation,type View}")
+s=s.replace("const walkthroughSeenKey", "import {readRoute,routeTo} from './components/navigation';\n\nconst walkthroughSeenKey")
+s=s.replace("useState<View>('dashboard')", "useState<View>(()=>readRoute().view)")
+s=s.replace(" const navigate=(next:View)=>{", " const navigate=(next:View)=>{if(next!=='detail'&&next!=='public'&&!roleNavigation[role].has(next))return;")
+s=s.replace("setView(next);window.scrollTo", "setView(next);if(next!=='detail')routeTo(next);window.scrollTo")
+s=s.replace("navigate('detail');};", "navigate('detail');routeTo('detail',item.caseKey??item.id,tab);};")
+pos=" const caseChanged="
+s=s.replace(pos,""" useEffect(()=>{
+  if(!authenticated)return;
+  const sync=()=>{const route=readRoute();if(route.view!=='detail'&&route.view!=='public'&&!roleNavigation[role].has(route.view)){setView('dashboard');routeTo('dashboard');return;}setView(route.view);if(route.view==='detail'){setDetailTab(route.tab);setSelected(cases.find(c=>(c.caseKey??c.id)===route.key)??null);}};
+  sync();window.addEventListener('hashchange',sync);return()=>window.removeEventListener('hashchange',sync);
+ },[authenticated,role,cases]);
+ useEffect(()=>{if(!authenticated)return;document.title=`${view==='detail'?selected?.id??'Case record':view.charAt(0).toUpperCase()+view.slice(1)} | EnforceFlow`;const frame=requestAnimationFrame(()=>document.getElementById('main-content')?.focus({preventScroll:true}));return()=>cancelAnimationFrame(frame);},[view,authenticated]);
+"""+pos)
+s=s.replace("setView('dashboard');setShowWalkthrough", "setView(readRoute().view);setShowWalkthrough")
+s=s.replace(" if(view==='public')return <PublicDisclosure onBack={()=>navigate('dashboard')}/>;", "")
+s=s.replace(" if(view==='dashboard')content", " if(view==='public')content=<PublicDisclosure onBack={()=>navigate('dashboard')}/>;\n else if(view==='dashboard')content")
+p.write_text(s,encoding='utf-8')

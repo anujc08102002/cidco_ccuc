@@ -1,0 +1,6 @@
+from pathlib import Path
+p=Path('src/features/dashboard/Dashboard.tsx');s=p.read_text(encoding='utf-8');a=s.rfind(' </div>');s=s[:a]+''' </div>;
+ const widgets=Children.toArray(content.props.children).filter(node=>isValidElement<{'data-widget':string}>(node)&&!preferences.hiddenWidgets.includes(node.props['data-widget'])).sort((a,b)=>{const rank=(node:unknown)=>isValidElement<{'data-widget':string}>(node)?preferences.dashboardOrder.indexOf(node.props['data-widget']):0;return rank(a)-rank(b);});
+ return <><div className="dashboard-account-tools"><span>Your workspace</span><div><button className="action-secondary" onClick={onLeave}><CalendarDays size={15}/> Leave / holidays</button><button className="action-secondary" onClick={onTransfer}><ArrowLeftRight size={15}/> Request transfer</button><button className="action-secondary" onClick={onCustomize}><Settings2 size={15}/> Customize dashboard</button></div></div><div className="dashboard-scene" data-layout={preferences.dashboardLayout}>{widgets.length?widgets:<div className="portal-message"><div><b>Your dashboard sections are hidden</b><p>Choose the sections you want to see in My workspace.</p></div><button className="action-primary" onClick={onCustomize}>Customize dashboard</button></div>}</div></>;
+}
+''';p.write_text(s,encoding='utf-8')

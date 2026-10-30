@@ -1,0 +1,25 @@
+from pathlib import Path
+p=Path('src/features/cases/CaseRegister.tsx');s=p.read_text(encoding='utf-8')
+s=s.replace('AlertTriangle, ChevronRight, CircleCheck, Filter, Search, SlidersHorizontal', 'ChevronRight, CircleCheck, Filter, MapPin, Search, SlidersHorizontal')
+s=s.replace('import {useEffect,useState}', 'import {useEffect,useState,type ReactNode}')
+s=s.replace('import {request}', 'import {StatusPill} from \'../../components/PortalUi\';\nimport {request}')
+s=s.replace('type Props={initialArchiveScope', 'type Props={advancedFilters?:ReactNode;initialArchiveScope')
+s=s.replace(' return <><details className="portal-filter-panel">', ' const advancedFilters=<details className="portal-filter-panel">')
+s=s.replace('</details><CaseRegisterBody {...p} cases={filtered}/></>;', '</details>;\n return <CaseRegisterBody {...p} cases={filtered} advancedFilters={advancedFilters}/>;')
+a=s.index(' return <div className="register-scene">',s.index('function CaseRegisterBody'))
+s=s[:a]+''' return <div className="register-scene">
+  <section className="register-head"><div><span className="section-index">WORKING REGISTER</span><h2>{archiveScope==="archived"?"Archived cases":"Enforcement cases"}</h2><p>{shown.length} case record{shown.length===1?"":"s"} in the current view</p></div><div className="register-tally"><span>ACTIVE<strong>{active}</strong></span><span>OVERDUE<strong className="red-text">{overdue}</strong></span><span>LEGAL HOLD<strong>{holds}</strong></span></div></section>
+  {p.role==="master"&&<section className="admin-register-toolbar"><label>Case view<select value={archiveScope} onChange={event=>setArchiveScope(event.target.value)}><option value="active">Active cases</option><option value="archived">Archived cases</option><option value="all">All cases</option></select></label><BackupButtons onNotify={p.onNotify??(()=>{})}/></section>}
+  <section className="filter-studio"><label className="smart-search"><Search size={16}/><input aria-label="Search case register" value={p.query} onChange={e=>p.onQuery(e.target.value)} placeholder="Search by case, property, owner or survey"/></label><div className="filter-controls"><select aria-label="Filter by node" value={p.node} onChange={e=>p.onNode(e.target.value)}><option>All nodes</option>{nodes.map(x=><option key={x}>{x}</option>)}</select><select aria-label="Filter by stage" value={p.stage} onChange={e=>p.onStage(e.target.value)}><option>All stages</option>{[...new Set(p.cases.map(x=>x.stage))].map(x=><option key={x}>{x}</option>)}</select><button onClick={()=>{p.onNode("All nodes");p.onStage("All stages");p.onQuery("")}}><SlidersHorizontal size={14}/> Reset filters</button></div></section>
+  {p.advancedFilters}
+  <section className="register-table modern-register">
+   {shown.length?<div className="portal-table-scroll" tabIndex={0} role="region" aria-label="Enforcement case records"><table className="portal-table"><thead><tr><th>Case & property</th><th>Node</th><th>Current stage</th><th>Responsible officer</th><th>Next action</th><th>Status</th><th>Actions</th></tr></thead><tbody>{shown.flatMap(c=>[
+    <tr key={c.id} className="register-primary-row"><td><button className="case-open-link" onClick={()=>p.onOpen(c)}>{c.id}<ChevronRight size={13}/></button><strong className="register-property">{c.property}</strong><small>{c.owner}</small>{c.archived&&<small className="archive-badge">Archived {c.archiveUntil?`until ${new Date(c.archiveUntil).toLocaleDateString("en-IN",{timeZone:"Asia/Kolkata"})}`:"forever"}</small>}</td><td>{c.node}</td><td><span className="register-stage">{c.stage.replace(/^\\d+\\.\\s*/,"")}</span></td><td>{c.officer}</td><td className={(c.overdueDays??0)>0?"red-text":""}>{c.updated}</td><td><StatusPill tone={c.legal?'red':c.status==='Closed'?'green':(c.overdueDays??0)>0?'amber':'blue'}>{c.legal?'Legal restriction':c.status}</StatusPill></td><td><div className="register-row-actions"><button className="action-secondary" onClick={()=>p.onOpen(c)}>{canVerify(c)||canApproveCcuc(c,p.role)?<><CircleCheck size={13}/>{canVerify(c)?'Verify case':'Approve case'}</>:<>Open case<ChevronRight size={13}/></>}</button>{p.role==="master"&&<AdminCaseControls item={c} compact onChanged={item=>p.onCaseChanged?.(item,c.caseKey??c.id)} onNotify={p.onNotify??(()=>{})}/>}</div></td></tr>,
+    <tr key={c.id+'-survey'} className="register-expansion-row"><td colSpan={7}><details className="survey-row-expander"><summary><MapPin size={13}/><span>Survey & location details</span><span className="register-survey-ref">{c.survey} · {c.notice}</span><ChevronRight size={13}/></summary><CaseSurveyDetails item={c} compact/><div className="register-location"><CaseLocation item={c}/></div></details></td></tr>
+   ])}</tbody></table></div>:<div className="register-empty"><Search size={25}/><h3>No matching cases</h3><p>Try another search or adjust the filters to find a case.</p></div>}
+   <footer><span>Showing {shown.length} case record{shown.length===1?"":"s"}</span></footer>
+  </section>
+ </div>;
+}
+'''
+p.write_text(s,encoding='utf-8')

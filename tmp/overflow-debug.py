@@ -1,0 +1,2 @@
+from pathlib import Path
+p=Path('server/verify-experience.mjs');s=p.read_text(encoding='utf-8').replace("headings:await page.locator('h1').allTextContents(),errors", "headings:await page.locator('h1').allTextContents(),errors,overflow:await page.evaluate(()=>Array.from(document.querySelectorAll('body *')).filter(e=>e.getBoundingClientRect().right>innerWidth+1&&getComputedStyle(e).position!=='fixed').slice(0,20).map(e=>({tag:e.tagName,cl:e.className,right:e.getBoundingClientRect().right,width:e.getBoundingClientRect().width})))");p.write_text(s,encoding='utf-8')

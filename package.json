@@ -1,0 +1,58 @@
+{
+  "name": "enforcement-portal-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test server/workflow.test.js server/admin-deletion.test.js server/site-report.test.js server/site-report-routes.test.js server/account-workspace.test.js server/password-recovery.test.js server/desktop-notifications.test.js server/notification-inbox.test.js server/drive-announcements.test.js",
+    "test:integration": "node server/verify-enforcement.js",
+    "test:notices": "node --test server/notice.test.js",
+    "test:notices:integration": "node server/verify-notices.js",
+    "test:experience": "node server/verify-experience.mjs",
+    "test:ui": "node server/verify-render.js && node server/verify-ui-consistency.js",
+    "restore:login": "node backups/login-before-congress-blue-20261021/restore-login.mjs",
+    "typecheck": "tsc -b",
+    "dev": "vite --host 0.0.0.0",
+    "api": "node server/index.js",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.11",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "@signpdf/placeholder-pdf-lib": "^3.3.0",
+    "@signpdf/signer-p12": "^3.3.0",
+    "@signpdf/signpdf": "^3.3.0",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@types/leaflet": "^1.9.22",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "exceljs": "^3.4.0",
+    "express": "^4.21.2",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^0.468.0",
+    "msnodesqlv8": "^5.6.0",
+    "mssql": "^11.0.1",
+    "node-forge": "^1.4.0",
+    "nodemailer": "^10.2.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.4.299",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.15.0",
+    "regenerator-runtime": "^0.14.1",
+    "tesseract.js": "^7.0.0",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "fake-indexeddb": "^6.2.6",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.7"
+  },
+  "allowScripts": {
+    "msnodesqlv8@5.6.0": true
+  }
+}

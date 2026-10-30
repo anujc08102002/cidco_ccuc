@@ -1,0 +1,8 @@
+from pathlib import Path
+p=Path('server/verify-experience.mjs');s=p.read_text(encoding='utf-8').replace("}finally{await browser.close();await vite.close();}","}catch(error){for(const context of browser.contexts())for(const page of context.pages()){console.log({url:page.url(),headings:await page.locator('h1').allTextContents(),errors});await page.screenshot({path:'tmp/experience-error.png',fullPage:true});}throw error;}finally{await browser.close();await vite.close();}");p.write_text(s,encoding='utf-8')
+p=Path('src/experience.css');s=p.read_text(encoding='utf-8');s+='''
+.new-shell :is(h1,h2,h3,h4,.mast-brand b,.hero-score strong,.signal-strip strong,.register-tally strong){font-family:'Segoe UI','DM Sans',Arial,sans-serif}
+.ef-auth-page{font-family:'Segoe UI',Arial,sans-serif}.ef-auth-page :is(h1,h2,strong){font-family:'Segoe UI',Arial,sans-serif}.ef-auth-values>div{color:#234a52;text-shadow:none}.ef-auth-values strong{color:#234a52;text-shadow:none}.ef-auth-values small{color:#617781;text-shadow:none}.ef-auth-values .ef-auth-value-icon{color:#087c80;background:#e0ebe6;box-shadow:none;border:0;text-shadow:none}.ef-auth-values svg{filter:none}.ef-auth-input input:focus-visible{outline:none!important;box-shadow:none!important}.ef-auth-input:focus-within{outline:3px solid #087c80;outline-offset:3px}.ef-auth-submit:disabled{background:#6e8d8e;color:white;opacity:1}.ef-auth-options button{color:#087c80}.ef-auth-page .ef-auth-values>div{border-color:#cddfd9}
+@media(max-width:760px){.ef-auth-story h2 br{display:block}.ef-auth-story h2{font-size:32px}}
+''';p.write_text(s,encoding='utf-8')
+p=Path('server/site-report.js');s=p.read_text(encoding='utf-8').replace('room(65);y-=15','room(100);y-=15');p.write_text(s,encoding='utf-8')

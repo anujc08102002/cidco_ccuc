@@ -1,0 +1,85 @@
+import {useEffect,useRef,useState} from 'react';
+import {AlertTriangle,BarChart3,CalendarDays,Camera,CheckCircle2,Clock3,FileSignature,Files,Filter,HardHat,RefreshCw,Scale,Search,Settings,ShieldCheck} from 'lucide-react';
+import type {View} from '../../components/AppShell';
+import {request} from '../../services/enforcementApi';
+import {displayDate,EmptyState,LoadState,OpenCaseButton,readable,StatusPill,stepLabel,WorkspaceHeader} from '../../components/PortalUi';
+import {WorkflowForm,type DataRow} from '../cases/CaseWorkflowPanel';
+import type {EnforcementCase} from '../../types';
+import {NoticeTemplateStudio} from './NoticeTemplateStudio';
+import {SignatureImageSettings} from './SignatureImageSettings';
+import {emptyReportFilters,ReportRegister,type ReportFilters} from './ReportRegister';
+
+const settingsSections=[{id:'limits',label:'Time limits',icon:Clock3},{id:'templates',label:'Document templates',icon:FileSignature},{id:'signatures',label:'Officer signatures',icon:ShieldCheck}] as const;
+const options=(values:string[])=>values.map(value=>({value,label:value}));
+const deadlineLabels:Record<string,string>={hearingDays:'Hearing window',orderDays:'Final order preparation',noticeDays:'Notice issuance',reviewDays:'Survey review',demolitionDays:'Demolition action',publicationDays:'Document publication',closureDays:'Case closure',escalateDays:'Escalation after due date',dueSoonDays:'Due-soon visibility'};
+const meta:Record<string,{title:string;kicker:string;description:string;icon:typeof Camera}>={
+ surveys:{title:'Site surveys',kicker:'FIELD OPERATIONS',description:'Review registered surveys, site observations and work awaiting verification.',icon:Camera},
+ documents:{title:'Notices and final orders',kicker:'FORMAL PROCEEDINGS',description:'Track preparation, approvals and publication for your assigned cases.',icon:FileSignature},
+ hearings:{title:'Hearing desk',kicker:'CASE PROCEEDINGS',description:'Review hearing-stage cases, scheduled dates and recorded proceedings.',icon:CalendarDays},
+ legal:{title:'Legal tracking',kicker:'LEGAL OVERSIGHT',description:'Review court records and enforcement restrictions against the relevant case.',icon:Scale},
+ demolition:{title:'Demolition planning',kicker:'ENFORCEMENT ACTION',description:'Coordinate drive plans and track completion against linked cases.',icon:HardHat},
+ complaints:{title:'References and complaints',kicker:'DEPARTMENT CORRESPONDENCE',description:'Track incoming references, responses and supporting case documents.',icon:Files},
+ reports:{title:'Reports and registers',kicker:'OPERATIONAL INTELLIGENCE',description:'Review departmental activity through focused registers and case summaries.',icon:BarChart3},
+ settings:{title:'Workflow configuration',kicker:'DEPARTMENT ADMINISTRATION',description:'Manage time limits and approved document templates.',icon:Settings},
+};
+export function EnforcementWorkspace({kind,role,cases,onOpen,caseError='',casesLoading=false,onRetryCases}:{kind:View;role:string;cases:EnforcementCase[];onOpen:(c:EnforcementCase,tab?:string)=>void;caseError?:string;casesLoading?:boolean;onRetryCases?:()=>void}){
+ const [settingsTab,setSettingsTab]=useState<'limits'|'templates'|'signatures'>('limits');
+ const [error,setError]=useState(''),[loading,setLoading]=useState(true),[settings,setSettings]=useState<Record<string,number>>({}),[templates,setTemplates]=useState<DataRow[]>([]),[drives,setDrives]=useState<DataRow[]>([]),[reports,setReports]=useState<Record<string,DataRow[]>>({});
+ const [filters,setFilters]=useState<ReportFilters>(emptyReportFilters),[query,setQuery]=useState(''),[scope,setScope]=useState('all');
+ const requestId=useRef(0),d=meta[kind]??meta.surveys;
+ const load=async()=>{
+  const id=++requestId.current;setLoading(true);setError('');
+  try{
+   if(kind==='settings'){
+    const [values,templates]=await Promise.all([request<Record<string,number>>('/workflow/settings'),request<DataRow[]>('/workflow/templates')]);
+    if(id!==requestId.current)return;setSettings(values);setTemplates(templates);
+   }else if(kind==='demolition'){
+    const data=await request<DataRow[]>('/workflow/drives');if(id!==requestId.current)return;setDrives(data);
+   }else{
+    const params=new URLSearchParams(Object.entries(kind==='reports'?filters:{}).filter(([,v])=>v));
+    const data=await request<Record<string,DataRow[]>>('/workflow/reports?'+params);if(id!==requestId.current)return;setReports(data);
+   }
+  }catch(e){if(id===requestId.current)setError(e instanceof Error?e.message:'Records could not be loaded. Please try again.');}
+  finally{if(id===requestId.current)setLoading(false);}
+ };
+ useEffect(()=>{setQuery('');setScope('all');setReports({});void load();return()=>{++requestId.current;};},[kind,role]);
+ const save=async(path:string,body:unknown,method='POST')=>{await request(path,{method,body:JSON.stringify(body)});await load();};
+ const relevantRecords=kind==='documents'?(reports.Documents??[]).filter(d=>['Notice','Order'].includes(d.DocumentType)):kind==='hearings'?reports.Hearings??[]:kind==='complaints'?reports.CaseReferences??[]:kind==='legal'?reports.LegalUpdates??[]:[];
+ const forCase=(c:EnforcementCase)=>relevantRecords.filter(r=>r.caseNumber===(c.caseKey??c.id)||r.caseNumber===c.id);
+ const visible=cases.filter(c=>`${c.id} ${c.property} ${c.owner} ${c.node} ${c.officer}`.toLowerCase().includes(query.toLowerCase())&&(scope==='all'||scope==='overdue'&&(c.overdueDays??0)>0||scope==='restricted'&&c.legal||scope==='pending'&&c.status!=='Closed'));
+ const defaultTab=({surveys:'Case record',documents:'Documents',hearings:'Hearings',legal:'Legal & routing',complaints:'References',demolition:'Demolition'} as Record<string,string>)[kind];
+ const initialLoading=(casesLoading||loading)&&!cases.length&&!Object.keys(reports).length&&!drives.length&&!Object.keys(settings).length;
+ const rowsError=error||caseError;
+ return <div className="portal-workspace">
+  <WorkspaceHeader {...d} actions={<button className="action-secondary" onClick={()=>{void load();onRetryCases?.();}} disabled={loading}><RefreshCw size={14} className={loading?'portal-spin':''}/> Refresh</button>}/>
+  <LoadState error={rowsError} loading={initialLoading} onRetry={()=>{void load();onRetryCases?.();}}/>
+  {!initialLoading&&kind==='reports'&&(!rowsError||Object.keys(reports).length>0)&&<ReportRegister reports={reports} cases={cases} filters={filters} onFilters={setFilters} onApply={()=>void load()} onOpen={onOpen} loading={loading}/>}
+  {!initialLoading&&kind==='settings'&&(!error||Object.keys(settings).length>0)&&<>
+   <div className="workspace-segment-tabs" role="tablist" aria-label="Settings sections">{settingsSections.map((tab,index)=><button key={tab.id} id={`settings-tab-${tab.id}`} role="tab" aria-selected={settingsTab===tab.id} aria-controls={`settings-panel-${tab.id}`} tabIndex={settingsTab===tab.id?0:-1} onClick={()=>setSettingsTab(tab.id)} onKeyDown={e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const next=e.key==='Home'?0:e.key==='End'?2:(index+(e.key==='ArrowRight'?1:-1)+3)%3;setSettingsTab(settingsSections[next].id);document.getElementById(`settings-tab-${settingsSections[next].id}`)?.focus();}}><tab.icon size={16}/>{tab.label}</button>)}</div>
+   <section key={settingsTab} role="tabpanel" className="settings-section-panel" id={`settings-panel-${settingsTab}`} aria-labelledby={`settings-tab-${settingsTab}`}>
+    {settingsTab==='limits'&&<><div className="portal-settings-grid">{Object.entries(settings).map(([key,value])=><div className="portal-setting" key={key}><span>{deadlineLabels[key]??readable(key)}</span><strong>{value} <small>calendar days</small></strong></div>)}</div>
+     {role==='master'&&<section className="portal-settings-section"><h3>Time limits and escalation</h3><p>Changes apply to future workflow events. To change an existing case deadline, open the case and record a reason.</p><WorkflowForm title="Edit time limits" fields={[...Object.keys(settings).map(key=>({key,label:deadlineLabels[key]??readable(key),type:'number',initialValue:String(settings[key])})),{key:'reason',label:'Reason for change'}]} onSubmit={b=>save('/workflow/settings',{values:Object.fromEntries(Object.keys(settings).map(key=>[key,Number(b[key])])),reason:b.reason},'PUT')}/></section>}
+    </>}
+    {role==='master'&&settingsTab==='templates'&&<>
+     <section className="portal-settings-section"><h3>Approved notice and order templates</h3><p>Register approved wording and its departmental approval reference. Check statutory periods and any missing facts before approval.</p><NoticeTemplateStudio onSaved={load} templates={templates}/>{templates.length?<div className="portal-record-list">{templates.map(t=><article className="portal-record" key={t.TemplateId}><span className="portal-record-icon"><FileSignature size={18}/></span><div className="portal-record-content"><h4>{t.Name}</h4><small>{t.DocumentType} · Approval reference: {t.ApprovalReference}</small></div><StatusPill tone="green">Registered</StatusPill></article>)}</div>:<EmptyState icon={FileSignature} title="No departmental templates registered" description="Approved templates are required before notices and final orders can be prepared."/>}</section>
+     {templates.length>0&&<section className="portal-delete-confirm"><h3>Administrator template removal</h3><p>Delete unused templates only. Templates referenced by case documents are protected. An audit snapshot is retained.</p><WorkflowForm title="Delete a departmental template" submitLabel="Delete template" fields={[{key:'id',label:'Template to delete',options:templates.map(t=>({value:t.TemplateId,label:t.Name}))},{key:'confirmation',label:'Type confirm to delete'}]} onSubmit={b=>save('/admin/resources/templates/'+b.id,{confirmation:b.confirmation},'DELETE')}/></section>}
+    </>}
+    {role==='master'&&settingsTab==='signatures'&&<SignatureImageSettings/>}
+   </section>
+  </>}
+  {!initialLoading&&kind==='demolition'&&(!error||drives.length>0)&&<>
+   {role==='master'&&drives.length>0&&<section className="portal-delete-confirm"><h3>Administrator drive-plan removal</h3><p>Delete unused drive plans only. Plans linked to case demolition records are protected. An audit snapshot is retained.</p><WorkflowForm title="Delete a drive plan" submitLabel="Delete drive plan" fields={[{key:'id',label:'Drive plan to delete',options:drives.map(d=>({value:d.DriveId,label:d.SerialNumber}))},{key:'confirmation',label:'Type confirm to delete'}]} onSubmit={b=>save('/admin/resources/drives/'+b.id,{confirmation:b.confirmation},'DELETE')}/></section>}
+   <div className="portal-stats"><div className="portal-stat"><HardHat size={20}/><div><strong>{drives.length}</strong><span>Drive plans</span></div></div><div className="portal-stat"><Files size={20}/><div><strong>{drives.reduce((n,d)=>n+Number(d.LinkedCases??0),0)}</strong><span>Linked cases</span></div></div><div className="portal-stat"><CheckCircle2 size={20}/><div><strong>{drives.reduce((n,d)=>n+Number(d.CompletedCases??0),0)}</strong><span>Completed actions</span></div></div></div>
+   {role==='ccuc'&&<section className="portal-settings-section"><h3>Drive coordination</h3><p>Publishing a plan alerts other users immediately and adds it to their dashboards. Reminders appear the day before and on the drive date. All drive times are in India Standard Time. Link the relevant cases from their demolition tab.</p><WorkflowForm title="Announce demolition drive" submitLabel="Publish drive announcement" fields={[{key:'serial',label:'Drive serial number'},{key:'date',label:'Planned date and time (IST)',type:'datetime-local'},{key:'node',label:'Node'},{key:'details',label:'Decision and plan details',type:'textarea'}]} onSubmit={b=>save('/workflow/drives',b)}/>{drives.length>0&&<WorkflowForm title="Revise existing plan" fields={[{key:'driveId',label:'Drive plan',options:drives.map(d=>({value:d.DriveId,label:d.SerialNumber}))},{key:'date',label:'Revised date and time (IST)',type:'datetime-local'},{key:'details',label:'Revised plan',type:'textarea'},{key:'reason',label:'Reason for change'}]} onSubmit={b=>save('/workflow/drives/'+b.driveId,b,'PATCH')}/>}</section>}
+   <section className="portal-table-card"><header className="portal-table-heading"><div><h3>Drive register<span className="portal-count">{drives.length}</span></h3><p>Planned drives and progress against linked cases.</p></div></header>{drives.length?<div className="portal-table-scroll" tabIndex={0} role="region" aria-label="Scrollable records table"><table className="portal-table"><thead><tr><th>Drive reference</th><th>Planned date</th><th>Node</th><th>Plan details</th><th>Cases</th><th>Completed</th></tr></thead><tbody>{drives.map(d=><tr key={d.DriveId}><td><strong>{d.SerialNumber}</strong></td><td>{displayDate(d.PlannedAt)}</td><td>{d.Node}</td><td>{d.Details}</td><td>{d.LinkedCases}</td><td><StatusPill tone={d.CompletedCases?'green':'neutral'}>{d.CompletedCases} completed</StatusPill></td></tr>)}</tbody></table></div>:!rowsError&&<EmptyState icon={HardHat} title="No drive plans yet" description={role==='ccuc'?'Create a drive plan to coordinate the next enforcement action.':'Drive plans will appear here when a CCUC records them.'}/>}</section>
+  </>}
+  {!initialLoading&&!['reports','settings','demolition'].includes(kind)&&<>
+   <div className="portal-stats"><div className="portal-stat"><d.icon size={20}/><div><strong>{cases.length}</strong><span>Authorized cases</span></div></div><div className="portal-stat"><Clock3 size={20}/><div><strong>{kind==='surveys'?cases.filter(c=>[1,2].includes(c.currentStage??0)).length:relevantRecords.length}</strong><span>{kind==='surveys'?'Awaiting review':'Linked records'}</span></div></div><div className="portal-stat"><AlertTriangle size={20}/><div><strong>{cases.filter(c=>(c.overdueDays??0)>0).length}</strong><span>Overdue cases</span></div></div></div>
+   {kind==='legal'&&<div className="portal-message is-warning"><ShieldCheck size={18}/><div><b>External legal connection is not configured</b><p>Verified legal reviews can be recorded against a case. Live LTS synchronization requires the authorized departmental connection.</p></div></div>}
+   <section className="portal-table-card"><header className="portal-table-heading"><div><h3>{kind==='surveys'?'Survey case register':kind==='documents'?'Document case register':kind==='hearings'?'Hearing case register':kind==='legal'?'Legal review register':'Reference case register'}<span className="portal-count">{visible.length}</span></h3><p>Select a case to review its {kind==='complaints'?'references and responses':kind==='surveys'?'survey and site evidence':kind==='documents'?'notices, orders and versions':kind==='hearings'?'hearings and proceedings':'court records and restrictions'}.</p></div><div className="portal-control-actions"><label className="portal-search"><Search size={15}/><input aria-label="Search workspace cases" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search case or property…"/></label><select className="portal-scope-select" aria-label="Case queue" value={scope} onChange={e=>setScope(e.target.value)}><option value="all">All cases</option><option value="pending">Pending</option><option value="overdue">Overdue</option><option value="restricted">Legal restrictions</option></select></div></header>
+    {visible.length?<div className="portal-table-scroll" tabIndex={0} role="region" aria-label="Scrollable records table"><table className="portal-table"><thead><tr><th>Case / property</th><th>Node</th><th>{kind==='surveys'?'Surveyor':'Responsible officer'}</th><th>Current action</th><th>{kind==='surveys'?'Priority':'Linked records'}</th><th>Status</th><th>Action</th></tr></thead><tbody>{visible.map(c=><tr key={c.id}><td className="portal-reference-cell"><OpenCaseButton onClick={()=>onOpen(c,defaultTab)}>{c.id}</OpenCaseButton><small>{c.property} · {c.owner}</small></td><td>{c.node}</td><td>{kind==='surveys'?c.surveyor:c.officer}</td><td>{c.workflowStep?stepLabel(c.workflowStep):c.stage.replace(/^\d+\.\s*/,'')}</td><td>{kind==='surveys'?<StatusPill tone={c.priority==='Urgent'?'red':c.priority==='High'?'amber':'neutral'}>{c.priority??'Not recorded'}</StatusPill>:forCase(c).length}</td><td><StatusPill tone={c.legal?'red':c.status==='Closed'?'green':(c.overdueDays??0)>0?'amber':'blue'}>{c.legal?'Legal restriction':c.status}</StatusPill></td><td><OpenCaseButton onClick={()=>onOpen(c,defaultTab)}>Review</OpenCaseButton></td></tr>)}</tbody></table></div>:!rowsError&&<EmptyState icon={d.icon} title={query||scope!=='all'?'No matching cases':'No cases assigned yet'} description={query||scope!=='all'?'Try a different search or select all cases.':'Cases will appear when they are registered or assigned to your role.'}/>}
+    <footer className="portal-table-footer"><span>{visible.length} case{visible.length===1?'':'s'} · {kind==='surveys'?'Survey details are retained with each case':'Linked records are retained in the case history'}</span><span><Filter size={12}/> Role-based access applied</span></footer>
+   </section>
+  </>}
+ </div>;
+}

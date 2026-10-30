@@ -1,0 +1,3 @@
+from pathlib import Path
+p=Path('server/verify-experience.mjs');s=p.read_text(encoding='utf-8').replace("await context.addInitScript(()=>{localStorage.setItem", "await context.addInitScript(()=>{if(location.origin!=='http://127.0.0.1:5194')return;localStorage.setItem");p.write_text(s,encoding='utf-8')
+p=Path('server/site-report.js');s=p.read_text(encoding='utf-8').replace("import {parseContent}","import {WorkflowError} from './workflow-policy.js';\nimport {parseContent}").replace("throw new Error('The report font", "throw new WorkflowError('The report font").replace("compatible font.');", "compatible font.',422);");p.write_text(s,encoding='utf-8')

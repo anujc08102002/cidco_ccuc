@@ -1,0 +1,113 @@
+// Acceptance fixtures use fresh UUIDs and are removed in FK order. Existing records are never mutated.
+import dotenv from 'dotenv';
+import sql from 'mssql';
+import crypto from 'node:crypto';
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {issueSession} from './sessions.js';
+import {hashPassword} from './passwords.js';
+import {testHandwriting} from './signature-test-fixtures.js';
+let signatureImageHash;
+dotenv.config();
+const [server,port]=process.env.DB_SERVER.split(',');
+const p=await new sql.ConnectionPool({server,port:port?Number(port):undefined,database:process.env.DB_DATABASE,user:process.env.DB_USER,password:process.env.DB_PASSWORD,options:{encrypt:process.env.DB_ENCRYPT!=='false',trustServerCertificate:process.env.DB_TRUST_CERTIFICATE==='true'}}).connect();
+const run=p.request.bind(p),tag=crypto.randomUUID().slice(0,8),node='TEST-'+tag,password='Acceptance-password-'+tag;
+const users=Object.fromEntries(['surveyor','cuc','cuc2','ccuc','legal','master','outsider'].map(role=>[role,{UserId:crypto.randomUUID(),Username:`test-${tag}-${role}`,DisplayName:`Test ${role} ${tag}`,RoleCode:role==='cuc2'||role==='outsider'?'cuc':role,PasswordHash:hashPassword(password)}]));
+const baseline=(await run().query('SELECT CaseId,CONVERT(VARCHAR(16),RowVersion,2) AS V FROM enforcement.Cases')).recordset;
+const child=spawn(process.execPath,['server/index.js','--port=3101'],{env:process.env,stdio:['ignore','pipe','pipe']});
+let stderr='';child.stderr.on('data',d=>{stderr+=d;});child.stdout.on('data',()=>{});
+let key,id,driveId,checks=0;
+let relatedId;
+const templateIds=[];
+const api=async(role,path,body,expected=200,method=body===undefined?'GET':'POST')=>{
+ const r=await fetch('http://localhost:3101/api'+path,{method,headers:{'Content-Type':'application/json',...(role?{Authorization:'Bearer '+issueSession(users[role])}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});
+ const value=await r.json().catch(()=>null);assert.equal(r.status,expected,`${method} ${path}: ${JSON.stringify(value)}\n${stderr}`);checks++;return value;
+};
+const snapshot=()=>api('master',`/workflow/cases/${encodeURIComponent(key)}`);
+const save=async(role,suffix,body,expected=200)=>{if(suffix==='/documents')body={...body,responseDays:15,recipients:[{plot:'TEST-PLOT'}],authorityId:users.ccuc.UserId};const s=await snapshot();return api(role,`/workflow/cases/${encodeURIComponent(key)}${suffix}`,{...body,rowVersion:s.rowVersion},expected);};
+const act=(role,action,extra={},expected=200)=>save(role,'/actions',{action,reason:'Acceptance verification',...(role==='ccuc'&&/^approve-(notice|order)$/.test(action)?{signatureImageHash,previewReviewed:true}:{}),...(action==='issue-notice'&&expected===200?{previewReviewed:true}:{}),...extra},expected);
+const evidence=async(category,instrumentId)=>{await save('cuc','/evidence',{category,instrumentId,fileName:category.endsWith('demolition')?'photo.png':'instrument.pdf',base64:category.endsWith('demolition')?Buffer.from([137,80,78,71,13,10,26,10,0]).toString('base64'):Buffer.from('%PDF-fixture').toString('base64')},201);};
+try{
+ for(let n=0;n<100;n++){try{const r=await fetch('http://localhost:3101/api/health');if(r.ok)break;}catch{}await new Promise(resolve=>setTimeout(resolve,100));}
+ for(const u of Object.values(users))await run().input('id',sql.UniqueIdentifier,u.UserId).input('username',sql.NVarChar,u.Username).input('name',sql.NVarChar,u.DisplayName).input('role',sql.NVarChar,u.RoleCode).input('hash',sql.NVarChar,u.PasswordHash).query('INSERT enforcement.Users(UserId,Username,DisplayName,RoleCode,PasswordHash) VALUES(@id,@username,@name,@role,@hash)');
+ signatureImageHash=(await api('master','/workflow/signature-images',{...testHandwriting(),userId:users.ccuc.UserId})).signature.hash;
+ for(const type of ['Notice','Order']){await api('master','/workflow/templates',{name:`TEST ${tag} ${type}`,type,body:'ACCEPTANCE FIXTURE ONLY {{owner}} {{caseId}}',approvalReference:'TEST ONLY — not a departmental approval'},201);templateIds.push((await api('cuc','/workflow/templates')).find(t=>t.Name===`TEST ${tag} ${type}`).TemplateId);}
+ for(const [from,to] of [['surveyor','cuc'],['surveyor','cuc2'],['cuc','ccuc'],['cuc2','ccuc'],['ccuc','ccuc'],['legal','legal']])await api('master','/workflow/hierarchy',{userId:users[from].UserId,authorityId:users[to].UserId,node},200,'PUT');
+ await api(null,'/auth/login',{username:users.surveyor.Username,password},200);
+ const created=await api('surveyor','/cases',{propertyReference:'Test survey property '+tag,sector:'Test',node,ownerName:'Test owner '+tag,surveyReference:'Survey-'+tag,village:'Test village',plotNumber:'',cucId:users.cuc.UserId,latitude:19.1234567,longitude:73.1234567,priority:'Normal',applicableSections:['53'],violationDescription:'Temporary acceptance fixture'},201);key=created.caseKey;id=(await run().input('key',sql.NVarChar,key).query('SELECT CaseId FROM enforcement.Cases WHERE CaseNumber=@key')).recordset[0].CaseId;
+ assert.equal(created.latitude,19.1234567);assert.equal((await api('surveyor','/ui/cases')).find(c=>c.caseKey===key).village,'Test village');
+ assert(!(await api('outsider','/ui/cases')).some(c=>c.caseKey===key));
+ await api('outsider',`/workflow/cases/${encodeURIComponent(key)}`,undefined,404);
+ await save('surveyor','/evidence',{category:'evidence',fileName:'report.pdf',base64:Buffer.from('%PDF-survey').toString('base64')},201);
+ let s=await snapshot();const file=s.Documents[0];const download=await fetch(`http://localhost:3101/api/workflow/cases/${encodeURIComponent(key)}/evidence/${file.DocumentId}`,{headers:{Authorization:'Bearer '+issueSession(users.cuc)}});assert.equal(await download.text(),'%PDF-survey');checks++;
+ await act('cuc','return-survey');await save('surveyor','/survey',{owner:'Test owner '+tag,latitude:19.1234567,longitude:73.1234567,violation:'Corrected acceptance observation',reason:'Corrected requested survey details'});await act('surveyor','resubmit');
+ await save('cuc','/routing',{cucId:users.cuc2.UserId,reason:'Misroute correction'});await save('master','/routing',{cucId:users.cuc.UserId,reason:'Restore assigned acceptance CUC'});
+ await api('cuc',`/cases/${encodeURIComponent(key)}/approve`,{locationConfirmed:true});await api('ccuc',`/cases/${encodeURIComponent(key)}/approve`,{});
+ await save('cuc','/documents',{type:'Notice',templateId:templateIds[0],reference:'EXISTING-'+tag,content:'Acceptance notice, not a legal template.',reason:'Acceptance fixture'},201);
+ s=await snapshot();const notice1=s.Documents.find(d=>d.DocumentType==='Notice');await save('cuc','/documents',{type:'Notice',templateId:templateIds[0],reference:'EXISTING-'+tag,content:'Revised acceptance notice.',reason:'Verify version history'},201);
+ s=await snapshot();assert.equal(s.Documents.filter(d=>d.DocumentType==='Notice').length,2);const notice=s.Documents.find(d=>d.DocumentType==='Notice'&&d.VersionNumber===2);assert.equal(notice.SupersedesId.toLowerCase(),notice1.DocumentId.toLowerCase());
+ await act('cuc','submit-notice',{documentId:notice.DocumentId});await act('cuc','approve-notice',{documentId:notice.DocumentId},403);await act('ccuc','approve-notice',{documentId:notice.DocumentId});
+ await act('cuc','issue-notice',{documentId:notice.DocumentId},409);await evidence('signed-notice',notice.DocumentId);s=await snapshot();await act('cuc','issue-notice',{documentId:notice.DocumentId,signedDocumentId:s.Documents.find(d=>d.DocumentType==='signed-notice').DocumentId});
+ assert.equal((await api(null,`/public/search?field=name&q=${encodeURIComponent('Test owner '+tag)}`)).length,0);
+ await act('cuc','publish-notice',{documentId:notice.DocumentId});const pub=await api(null,`/public/search?field=name&q=${encodeURIComponent('Test owner '+tag)}`);assert.equal(pub.length,1);assert(!JSON.stringify(pub).includes('ResponsibleUserId'));await api(null,'/public/search?field=name&q=test&internal=true',undefined,400);
+ await save('cuc','/hearings',{noticeId:notice.DocumentId,hearingAt:new Date().toISOString(),venue:'Test office',status:'Completed',attendance:'Present',proceedings:'Acceptance proceedings'},201);await act('cuc','complete-hearing');
+ s=await snapshot();const hearing=s.Hearings[0];assert.equal(new Date(s.case.nextActionAt).getTime()-new Date(hearing.HearingAt).getTime(),15*86400000);
+ await save('cuc','/documents',{type:'Order',templateId:templateIds[1],reference:'ORDER-'+tag,content:'Acceptance order, not legally operative.',reason:'Acceptance fixture'},201);s=await snapshot();const order=s.Documents.find(d=>d.DocumentType==='Order');
+ await act('cuc','submit-order',{documentId:order.DocumentId});await act('master','approve-order',{documentId:order.DocumentId},403);await act('ccuc','approve-order',{documentId:order.DocumentId});
+ await evidence('signed-order',order.DocumentId);s=await snapshot();await act('cuc','issue-order',{documentId:order.DocumentId,signedDocumentId:s.Documents.find(d=>d.DocumentType==='signed-order').DocumentId});await act('cuc','publish-order',{documentId:order.DocumentId});
+ await save('legal','/legal',{reference:'Court-'+tag,source:'Acceptance fixture court instrument',status:'Stay recorded',restricts:true,reason:'Test restriction'},201);await act('cuc','complete-demolition',{outcome:'Test'},409);
+ relatedId=crypto.randomUUID();await run().input('id',sql.UniqueIdentifier,relatedId).input('source',sql.UniqueIdentifier,id).input('key',sql.NVarChar,key+'/RELATED').query("INSERT enforcement.Cases(CaseId,CaseNumber,PropertyReference,Sector,Node,OwnerName,SurveyReference,Village,AssignedSurveyorId,AssignedCucId,ResponsibleUserId,CurrentStage,WorkflowStep,Status) SELECT @id,@key,PropertyReference,Sector,Node,OwnerName,SurveyReference,Village,AssignedSurveyorId,AssignedCucId,ResponsibleUserId,8,'demolition','In progress' FROM enforcement.Cases WHERE CaseId=@source");
+ const relatedPath='/workflow/cases/'+encodeURIComponent(key+'/RELATED');const related=await api('cuc',relatedPath);assert.equal(related.case.legal,true);assert(related.LegalUpdates.some(l=>l.LegalReference==='Court-'+tag));await api('cuc',relatedPath+'/actions',{action:'complete-demolition',reason:'Property hold must apply',outcome:'Blocked test',rowVersion:related.rowVersion},409);checks+=2;
+ assert((await api('cuc','/dashboard')).LegalHolds>=2);checks++;
+ await run().input('id',sql.UniqueIdentifier,relatedId).query("UPDATE enforcement.Cases SET Village='Different test village' WHERE CaseId=@id");assert.equal((await api('cuc',relatedPath)).case.legal,false);checks++;
+ await run().input('id',sql.UniqueIdentifier,relatedId).query('DELETE enforcement.Cases WHERE CaseId=@id');relatedId=null;
+ await save('legal','/legal',{reference:'Court-'+tag,source:'Acceptance fixture',status:'Clearance',restricts:false,reason:'Not authorized clearance'},403);await save('ccuc','/legal',{reference:'Court-'+tag,source:'Acceptance fixture clearance',status:'Stay vacated',restricts:false,reason:'Test authorized clearance'},201);
+ await api('cuc',`/workflow/cases/${encodeURIComponent(key)}/lts`,undefined,503);
+ await api('ccuc','/workflow/drives',{serial:'DRIVE-'+tag,date:new Date().toISOString(),node,details:'Acceptance plan'},201);driveId=(await api('ccuc','/workflow/drives')).find(d=>d.SerialNumber==='DRIVE-'+tag).DriveId;await save('cuc','/drive',{driveId});
+ await evidence('before-demolition');await evidence('after-demolition');await act('cuc','complete-demolition',{outcome:'Acceptance completion'});await act('cuc','update-record');
+ await save('cuc','/references',{source:'Government',reference:'GOV-'+tag,date:'2026-10-15',status:'Pending',details:'Test reference'},201);await act('cuc','close',{},409);
+ s=await snapshot();await save('cuc','/references',{referenceId:s.CaseReferences[0].ReferenceId,source:'Government',reference:'GOV-'+tag,date:'2026-10-15',status:'Completed',response:'Acceptance response',respondedAt:'2026-10-15'},201);
+ await save('ccuc','/transfer',{cucId:users.cuc2.UserId,startsAt:new Date(Date.now()-60000).toISOString(),endsAt:new Date(Date.now()+60000).toISOString(),reason:'Test charge'});await api('cuc2',`/workflow/cases/${encodeURIComponent(key)}`);
+ const stale=(await snapshot()).rowVersion;await save('master','/deadline',{dueAt:new Date(Date.now()-3*86400000).toISOString(),reason:'Test escalation'});await api('cuc',`/workflow/cases/${encodeURIComponent(key)}/actions`,{action:'close',reason:'Stale request',rowVersion:stale},409);
+ const report=await api('ccuc','/workflow/reports');assert(report.cases.find(c=>c.caseKey===key).escalatedAt);await act('cuc','close');assert.equal((await snapshot()).case.status,'Closed');
+ const access=await api('master','/workflow/reports');assert(access.UserAccess.some(u=>u.Username===users.cuc.Username&&u.jurisdictions===node));assert(access.NoticeRegister.some(r=>r.caseNumber===key));assert(access.PublicationRegister.filter(r=>r.caseNumber===key).length===2);assert(access.Closures.some(r=>r.caseNumber===key));assert(access.WorkflowDurations.some(r=>r.caseNumber===key));checks+=5;
+ let beforeAdmin=(await snapshot()).case;await api('master',`/admin/cases/${encodeURIComponent(key)}`,{...beforeAdmin,owner:'Edited test owner '+tag},200,'PATCH');await api('master',`/admin/cases/${encodeURIComponent(key)}`,beforeAdmin,409,'PATCH');
+ beforeAdmin=(await snapshot()).case;await api('master',`/admin/cases/${encodeURIComponent(key)}`,{...beforeAdmin,currentStage:1},409,'PATCH');await api('master',`/cases/${encodeURIComponent(key)}/approve`,{locationConfirmed:true},403);
+ const backup=await api('master','/admin/cases/backup?format=json');assert(backup.tables.DocumentTemplates.some(t=>templateIds.includes(t.TemplateId)));assert(backup.tables.Documents.some(d=>sameId(d.CaseId,id)&&d.FileContent));assert(backup.tables.Users.every(u=>!('PasswordHash' in u)));checks+=3;
+ await api('master',`/admin/cases/${encodeURIComponent(key)}/archive`,{days:1,reason:'Acceptance archive'});assert(!(await api('cuc','/ui/cases')).some(c=>c.caseKey===key));assert.equal((await api(null,`/public/search?field=name&q=${encodeURIComponent('Edited test owner '+tag)}`)).length,0);await api('master',`/admin/cases/${encodeURIComponent(key)}/restore`,{});
+ await api('cuc',`/users/${users.outsider.UserId}`,{confirmation:'confirm'},403,'DELETE');
+ await api('master',`/users/${users.master.UserId}`,{confirmation:'confirm'},409,'DELETE');
+ await api('master',`/users/${users.outsider.UserId}`,{confirmation:'wrong'},400,'DELETE');
+ await api('ccuc',`/admin/resources/drives/${driveId}`,{confirmation:'confirm'},403,'DELETE');
+ await api('master',`/admin/resources/drives/${driveId}`,{confirmation:'confirm'},409,'DELETE');
+ await api('master',`/admin/resources/templates/${templateIds[0]}`,{confirmation:'confirm'},409,'DELETE');
+ await api('master',`/admin/resources/templates/${templateIds[0]}`,{confirmation:'wrong'},400,'DELETE');
+ await api('master',`/users/${users.outsider.UserId}`,{active:false},200,'PATCH');await api('outsider','/ui/cases',undefined,401);await api(null,'/auth/login',{username:users.outsider.Username,password},401);
+ await api('master',`/users/${users.cuc.UserId}`,{confirmation:'confirm'},204,'DELETE');
+ assert(!(await api('master','/users')).some(u=>sameId(u.id,users.cuc.UserId)));checks++;
+ await api('cuc','/ui/cases',undefined,401);await api(null,'/auth/login',{username:users.cuc.Username,password},401);
+ await api('master',`/users/${users.cuc.UserId}`,{active:true},409,'PATCH');
+ const historical=await snapshot();assert.equal(historical.case.cucId.toLowerCase(),users.cuc.UserId.toLowerCase());checks++;
+ await api('master',`/cases/${encodeURIComponent(key)}`,{confirmation:'wrong'},400,'DELETE');
+ await api('master',`/cases/${encodeURIComponent(key)}`,{confirmation:'confirm'},204,'DELETE');
+ await api('master',`/workflow/cases/${encodeURIComponent(key)}`,undefined,404);
+ const deleted=(await run().input('id',sql.UniqueIdentifier,id).query("SELECT Detail FROM enforcement.AuditLog WHERE EntityId=@id AND EventType='AdminCaseDeleted'")).recordset[0];
+ const preserved=JSON.parse(deleted.Detail);assert(preserved.Documents.length&&preserved.CaseReferences.length&&preserved.ChargeTransfers.length&&preserved.Hearings.length);checks++;
+ await api('master',`/admin/resources/drives/${driveId}`,{confirmation:'confirm'},204,'DELETE');driveId=null;
+ for(const templateId of templateIds)await api('master',`/admin/resources/templates/${templateId}`,{confirmation:'confirm'},204,'DELETE');templateIds.length=0;
+ console.log(JSON.stringify({passed:true,checks,workflow:'survey → CUC → CCUC → notice v2 → approval → signed issuance → publication → hearing → order → approval → issuance → publication → legal hold/clearance → drive → evidence → demolition → reference response → record update → closure'}));
+}finally{
+ child.kill();
+ if(relatedId)await run().input('id',sql.UniqueIdentifier,relatedId).query('DELETE enforcement.Cases WHERE CaseId=@id');
+ if(id){
+  for(const table of ['CaseReferences','ChargeTransfers','CaseActions','Surveys','Hearings','LegalUpdates','DemolitionDrives'])await run().input('id',sql.UniqueIdentifier,id).query(`DELETE enforcement.${table} WHERE CaseId=@id`);
+  await run().input('id',sql.UniqueIdentifier,id).query('UPDATE enforcement.Documents SET SupersedesId=NULL WHERE CaseId=@id; DELETE enforcement.Documents WHERE CaseId=@id; DELETE enforcement.AuditLog WHERE EntityId=@id; DELETE enforcement.Cases WHERE CaseId=@id');
+ }
+ if(driveId)await run().input('id',sql.UniqueIdentifier,driveId).query('DELETE enforcement.DrivePlans WHERE DriveId=@id');
+ for(const templateId of templateIds)await run().input('id',sql.UniqueIdentifier,templateId).query('DELETE enforcement.DocumentTemplates WHERE TemplateId=@id');
+ await run().input('key',sql.NVarChar,'signature-image:'+users.ccuc.UserId.toLowerCase()).query('DELETE enforcement.Settings WHERE SettingKey=@key');
+ for(const u of Object.values(users))await run().input('id',sql.UniqueIdentifier,u.UserId).query('DELETE enforcement.ReportingLinks WHERE UserId=@id OR AuthorityId=@id; DELETE enforcement.AuditLog WHERE UserId=@id; DELETE enforcement.Users WHERE UserId=@id');
+ const after=(await run().query('SELECT CaseId,CONVERT(VARCHAR(16),RowVersion,2) AS V FROM enforcement.Cases')).recordset;assert.deepEqual(after,baseline,'Existing case rows changed during acceptance tests');
+ await p.close();
+}
+function sameId(a,b){return String(a).toLowerCase()===String(b).toLowerCase();}

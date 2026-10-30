@@ -1,0 +1,6 @@
+from pathlib import Path
+p=Path('server/verify-experience.mjs');s=p.read_text(encoding='utf-8')
+s=s.replace("await page.screenshot({path:'output/ui/site-report-desktop.png',fullPage:true});", "await page.getByRole('status').filter({hasText:'Rendering printable page'}).waitFor({state:'hidden',timeout:30000});check(await page.locator('.notice-pdf-paper canvas').evaluate(el=>el.width>300&&el.height>300),'PDF preview rendered');await page.evaluate(()=>{document.activeElement?.blur?.();window.scrollTo({top:0,behavior:'instant'});});await page.screenshot({path:'output/ui/site-report-desktop.png',fullPage:true});")
+s=s.replace("await page.screenshot({path:'output/ui/dashboard-dark.png',fullPage:true});", "await page.evaluate(()=>{document.activeElement?.blur?.();window.scrollTo({top:0,behavior:'instant'});});await page.screenshot({path:'output/ui/dashboard-dark.png',fullPage:true});")
+p.write_text(s,encoding='utf-8')
+p=Path('src/features/dashboard/Dashboard.tsx');s=p.read_text(encoding='utf-8').replace('stopColor="#6660d5"','stopColor="var(--brand)"').replace('stroke="#6660d5"','stroke="var(--brand)"');s=s.replace('<Tooltip/>','<Tooltip contentStyle={{background:\'var(--surface)\',border:\'1px solid var(--line)\',borderRadius:10,color:\'var(--ink)\',fontSize:12}} labelStyle={{color:\'var(--ink)\'}}/>');p.write_text(s,encoding='utf-8')

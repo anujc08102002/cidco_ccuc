@@ -1,0 +1,2 @@
+from pathlib import Path
+p=Path('src/features/cases/NoticeDocuments.tsx');s=p.read_text(encoding='utf-8');s=s.replace("title='Printable document',onLoaded}:{path:string;autoOpen?:boolean;title?:string;onLoaded?:()=>void}","title='Printable document',downloadName='cidco-notice.pdf',onLoaded}:{path:string;autoOpen?:boolean;title?:string;downloadName?:string;onLoaded?:()=>void}");s=s.replace('download="cidco-notice.pdf"','download={downloadName}');p.write_text(s,encoding='utf-8')

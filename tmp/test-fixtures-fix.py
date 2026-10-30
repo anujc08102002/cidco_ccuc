@@ -1,0 +1,3 @@
+from pathlib import Path
+p=Path('server/verify-experience.mjs');s=p.read_text(encoding='utf-8').replace("else if(u.pathname==='/api/workflow/settings')", "else if(u.pathname==='/api/workflow/notice-starter')data={body:''};\n else if(u.pathname==='/api/workflow/settings')");p.write_text(s,encoding='utf-8')
+p=Path('server/site-report.js');s=p.read_text(encoding='utf-8');s=s.replace("if(current)page.drawText(current,{x:48,y,size,font,color});y-=size*1.5;current=char==='\\n'?'':char;", "const split=char==='\\n'?-1:current.lastIndexOf(' '),draw=split>0?current.slice(0,split):current;if(draw)page.drawText(draw,{x:48,y,size,font,color});y-=size*1.5;current=char==='\\n'?'':(split>0?current.slice(split+1):'')+char;");p.write_text(s,encoding='utf-8')

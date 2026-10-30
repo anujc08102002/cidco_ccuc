@@ -1,0 +1,26 @@
+from pathlib import Path
+p=Path('src/components/AppShell.tsx');s=p.read_text(encoding='utf-8').replace("import {useEffect,useState,type ReactNode}","import {Fragment,useEffect,useState,type ReactNode}")
+s=s.replace(" const available=", " const navGroup=(id:View)=>['dashboard','register','surveys'].includes(id)?'Workspace':['documents','hearings','legal','demolition','complaints'].includes(id)?'Case management':'Administration';\n const available=")
+s=s.replace("{available.map(([id,label,Icon])=><button key={id}", "{available.map(([id,label,Icon],index)=><Fragment key={id}>{(index===0||navGroup(available[index-1][0])!==navGroup(id))&&<span className=\"nav-group-label\">{navGroup(id)}</span>}<button")
+s=s.replace('<span className="nav-number">{pageHelp[id].key.toUpperCase()}</span><Icon size={17}/><b>{label}</b></button>)}</nav></aside>', '<Icon size={18}/><b>{label}</b><span className="nav-number">{pageHelp[id].key.toUpperCase()}</span></button></Fragment>)}</nav><button className="rail-help-card" onClick={()=>setHelp(true)}><Keyboard size={18}/><span><b>A little help, anytime</b><small>Keyboard shortcuts & navigation</small></span><ArrowRight size={15}/></button></aside>')
+s=s.replace('<span>ENFORCEMENT / {props.view.toUpperCase()}</span>', '<span className="workspace-breadcrumb">Workspace <span>/</span> {title}</span>')
+s=s.replace('<main id="main-content"', '<main key={props.view} id="main-content"')
+s=s.replace('className="mast-brand"><img', 'className="mast-brand"><img')
+p.write_text(s,encoding='utf-8')
+p=Path('src/features/dashboard/Dashboard.tsx');s=p.read_text(encoding='utf-8');s=s.replace('line:"A clear view.",accent:"A better working day."','line:"Every case.",accent:"A clearer perspective."').replace('eyebrow:"MASTER CONTROL"','eyebrow:"YOUR ENFORCEMENT WORKSPACE"')
+s=s.replace('NEEDS YOUR ATTENTION','ATTENTION REQUIRED').replace('cases past their next deadline','cases have passed their deadline').replace('Open a case to review the next action','Review deadlines in your case register').replace('PRIORITY QUEUE','YOUR PRIORITY QUEUE').replace('Intervention required','Cases to focus on').replace('CASE GEOGRAPHY','CASE LOCATIONS').replace('NODE PRESSURE','ACROSS YOUR NODES').replace('LEGAL CONTROL','LEGAL RESTRICTIONS')
+s=s.replace('stroke="#1687e8"','stroke="#6660d5"').replace('stopColor="#1687e8"','stopColor="#6660d5"').replace('stroke="#16865b"','stroke="#4d9e88"')
+s=s.replace('<section className="dashboard-shortcuts"', '<section className="dashboard-shortcuts"')
+p.write_text(s,encoding='utf-8')
+p=Path('src/features/auth/SignIn.tsx');s=p.read_text(encoding='utf-8')
+a=s.index('    <section className="ef-auth-story"');b=s.index('    <section className="ef-auth-card"',a)
+s=s[:a]+'''    <section className="ef-auth-story" aria-labelledby="auth-story-title"><div className="auth-story-content"><span className="auth-eyebrow"><span/> THE CIDCO ENFORCEMENT WORKSPACE</span><h2 id="auth-story-title">Better oversight.<br/>Clearer decisions.<br/><em>One workspace.</em></h2><p>From the first site visit to the final report, keep every case moving with clarity.</p><div className="auth-workflow" aria-label="Case journey"><span>Survey</span><ArrowRight size={14}/><span>Review</span><ArrowRight size={14}/><span>Action</span><ArrowRight size={14}/><span>Report</span></div></div><div className="auth-story-bottom"><ShieldCheck size={19}/><span><b>Purpose-built for public service</b><small>Connected records. Accountable decisions.</small></span></div></section>
+'''+s[b:]
+s=s.replace('<h1 id="ef-auth-title">Enforce<span>Flow</span></h1>', '<span className="auth-form-kicker">WELCOME TO YOUR WORKSPACE</span><h1 id="ef-auth-title">Enforce<span>Flow</span></h1>')
+s=s.replace('<div className="ef-auth-principles">Monitoring <i/> Action <i/> Compliance <i/> Safer Cities</div>', '')
+s=s.replace('"Welcome back"','"Sign in"').replace('"Sign in with your CIDCO account"','"Enter your official credentials to continue."')
+s=s.replace('   <footer className="ef-auth-values">{values.map(({Icon,title,detail})=><div key={title}><span className="ef-auth-value-icon"><Icon size={28} strokeWidth={1.6} aria-hidden="true"/></span><span><strong>{title}</strong><small>{detail}</small></span></div>)}</footer>', '   <footer className="ef-auth-footer"><span>City and Industrial Development Corporation of Maharashtra Ltd.</span><a href="/public">View public notices <ArrowRight size={14}/></a></footer>')
+a=s.index(' const values=[');b=s.index(' return (',a);s=s[:a]+s[b:]
+s=s.replace('ArrowRight, Building2, Eye, EyeOff, Landmark, Leaf, LockKeyhole','ArrowRight, Eye, EyeOff, LockKeyhole')
+p.write_text(s,encoding='utf-8')
+p=Path('src/features/cases/CaseDetail.tsx');s=p.read_text(encoding='utf-8').replace('<main className="portal-case-main"','<main key={section} className="portal-case-main"');p.write_text(s,encoding='utf-8')

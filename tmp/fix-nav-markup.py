@@ -1,0 +1,2 @@
+from pathlib import Path
+p=Path('src/components/AppShell.tsx');s=p.read_text(encoding='utf-8');s=s.replace('<div className="shortcut-grid">{available.map(([id,label,Icon],index)=><Fragment key={id}>{(index===0||navGroup(available[index-1][0])!==navGroup(id))&&<span className="nav-group-label">{navGroup(id)}</span>}<button onClick=', '<div className="shortcut-grid">{available.map(([id,label,Icon])=><button key={id} onClick=');p.write_text(s,encoding='utf-8')

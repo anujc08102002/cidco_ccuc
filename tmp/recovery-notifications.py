@@ -1,0 +1,27 @@
+from pathlib import Path
+p=Path('src/services/enforcementApi.ts');s=p.read_text().replace('  notifications:()=>', '  attention:()=>request<string[]>("/me/attention"),\n  notifications:()=>',1);p.write_text(s)
+p=Path('src/App.tsx');s=p.read_text()
+s=s.replace("import {enforcementApi} from './services/enforcementApi';", "import {enforcementApi,type AccountNotification} from './services/enforcementApi';")
+s=s.replace(' const accountEpoch=useRef(0)', " const [notifications,setNotifications]=useState<AccountNotification[]>([]),[attention,setAttention]=useState<string[]>([]),[notificationError,setNotificationError]=useState(''),[focusStaff,setFocusStaff]=useState<string|null>(null);\n const accountEpoch=useRef(0)",1)
+s=s.replace("setContinuity(null);enforcementApi.signOut();", "setContinuity(null);setNotifications([]);setAttention([]);setFocusStaff(null);setNotificationError('');setToast('');window.clearTimeout(toastTimer.current);enforcementApi.signOut();",1)
+s=s.replace('const expired=()=>{enforcementApi.signOut();', "const expired=()=>{++accountEpoch.current;setNotifications([]);setAttention([]);setContinuity(null);setFocusStaff(null);setNotificationError('');setToast('');window.clearTimeout(toastTimer.current);enforcementApi.signOut();",1)
+pos=s.index(' const savePersonal=')
+s=s[:pos]+''' const refreshNotifications=async()=>{const epoch=accountEpoch.current;try{const [items,keys]=await Promise.all([enforcementApi.notifications(),enforcementApi.attention()]);if(epoch===accountEpoch.current){setNotifications(Array.isArray(items)?items:[]);setAttention(Array.isArray(keys)?keys:[]);setNotificationError('');}}catch{if(epoch===accountEpoch.current)setNotificationError('Account notifications could not be loaded. Retry to see current messages.');}};
+ useEffect(()=>{if(!authenticated)return;setNotifications([]);setAttention([]);setNotificationError('');void refreshNotifications();const refresh=()=>void refreshNotifications(),timer=window.setInterval(refresh,15000);window.addEventListener('enforcement:changed',refresh);window.addEventListener('focus',refresh);return()=>{window.clearInterval(timer);window.removeEventListener('enforcement:changed',refresh);window.removeEventListener('focus',refresh);};},[authenticated,role]);
+''' + s[pos:]
+s=s.replace('<WorkspacePage kind={view}', '<WorkspacePage focusUserId={focusStaff} kind={view}',1)
+s=s.replace('return <AppShell view={view}', '''return <AppShell notifications={notifications} notificationError={notificationError} attentionKeys={attention} onRefreshNotifications={()=>void refreshNotifications()} onOpenNotification={item=>{if(item.kind==='recovery'&&role==='master'){setFocusStaff(item.userId??null);navigate('staff');}}} onDismissNotification={item=>{void enforcementApi.dismissNotification(item.id).then(()=>refreshNotifications()).catch(error=>notify(error.message));}} view={view}''',1)
+p.write_text(s)
+p=Path('src/components/AppShell.tsx');s=p.read_text()
+s="import type {AccountNotification} from '../services/enforcementApi';\n"+s
+s=s.replace('type Props={preferences?', 'type Props={notifications?:AccountNotification[];notificationError?:string;attentionKeys?:string[];onRefreshNotifications?:()=>void;onOpenNotification?:(item:AccountNotification)=>void;onDismissNotification?:(item:AccountNotification)=>void;preferences?',1)
+s=s.replace("const alerts=(props.cases??[]).filter(c=>", "const alerts=(props.cases??[]).filter(c=>(props.attentionKeys===undefined||props.attentionKeys.includes(c.caseKey??c.id))&&",1)
+s=s.replace(" const searchResults=", " const noticeCount=alerts.length+(props.continuityCount??0)+(props.notifications?.length??0);\n const searchResults=",1)
+s=s.replace('setNotices(!notices);setProfile(false);', 'setNotices(!notices);setProfile(false);if(!notices)props.onRefreshNotifications?.();',1)
+s=s.replace("`Notifications${alerts.length?`, ${alerts.length} cases need attention`:''}`", "`Notifications${noticeCount?`, ${noticeCount} items need attention`:''}`",1)
+s=s.replace("{alerts.length>0&&<i>{alerts.length>9?'9+':alerts.length}</i>}", "{noticeCount>0&&<i>{noticeCount>9?'9+':noticeCount}</i>}",1)
+s=s.replace('CASE ATTENTION QUEUE', 'YOUR NOTIFICATIONS')
+s=s.replace('{Boolean(props.continuityCount)&&<button', '''{props.notificationError&&<div className="notification-load-error"><p>{props.notificationError}</p><button className="action-secondary" onClick={props.onRefreshNotifications}>Retry notifications</button></div>}{props.notifications?.map(item=><div key={item.id} className="account-notification"><button onClick={()=>{props.onOpenNotification?.(item);if(item.kind==='recovery')setNotices(false);}}><ShieldCheck size={16}/><span>{item.title}<small>{item.kind==='recovery'?(item.status==='Mismatch'?`Details mismatch · submitted email: ${item.submittedEmail}`:`${item.email??'Email not registered'} · open People & access`):'This message is for your account'}</small></span>{item.kind==='recovery'&&<ArrowRight size={14}/>}</button>{(item.kind==='account'||item.status==='Mismatch')&&<button className="notification-dismiss" aria-label={`Dismiss ${item.title}`} onClick={()=>props.onDismissNotification?.(item)}>Dismiss</button>}</div>)}{Boolean(props.continuityCount)&&<button''',1)
+s=s.replace(":!props.continuityCount&&<EmptyState", ":!props.continuityCount&&!props.notifications?.length&&!props.notificationError&&<EmptyState",1)
+s=s.replace('There are no overdue cases or legal restrictions in your current queue.', 'There are no account messages or case alerts requiring your attention.')
+p.write_text(s)

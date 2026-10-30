@@ -1,0 +1,14 @@
+.operations-map { isolation: isolate; }
+.severity-map-layout{display:grid;grid-template-columns:minmax(0,1fr) 195px;flex:1;min-height:330px}.severity-map-layout .operations-map{min-height:360px;height:100%;min-width:0}.severity-map-legend{padding:18px 14px;background:var(--surface);border-left:1px solid var(--line);color:var(--text)}.severity-map-legend h4{font-size:13px;color:var(--ink);margin:0 0 5px}.severity-map-legend p,.severity-map-legend small{font-size:11px;color:var(--muted);line-height:1.5}.severity-map-legend small{display:block;margin-top:16px}.severity-legend-row{display:grid;grid-template-columns:20px 1fr 20px;align-items:center;gap:8px;margin:13px 0;font-size:11px}.severity-legend-row b{text-align:right}.severity-map-pin{background:transparent;border:0;filter:drop-shadow(0 3px 3px #16365c55)}.severity-map-pin svg{display:block}.geographic-case-details div{white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:760px){.severity-map-layout{grid-template-columns:1fr}.severity-map-legend{border-left:0;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:0 15px}.severity-map-legend h4,.severity-map-legend p,.severity-map-legend small{grid-column:1/-1}.severity-map-layout .operations-map{height:300px;min-height:300px}.severity-map-legend small{margin-top:4px}}
+.geospatial-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; background: #eaf5ff; }
+.operations-map .map-no-cases { z-index: 1; pointer-events: none; }
+.geographic-map-summary { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--line); padding: 10px 16px; font-size: 11px; color: var(--muted); }
+.geographic-case-details { font: 12px/1.5 "DM Sans",Arial,sans-serif; color: #16365c; white-space: normal; width: 280px; max-width: 70vw; }
+.geographic-case-details section+section { border-top: 1px solid #e2ecf5; padding-top: 10px; margin-top: 10px; }
+.geographic-case-details strong { display: block; color: #0878c9; font-size: 14px; margin-bottom: 6px; }
+.geographic-case-details b { font-weight: 600; }
+.geographic-case-details a { display: inline-block; margin-top: 8px; }
+.case-geographic-tooltip { max-height: 220px; overflow-y: auto; border-radius: 9px; padding: 12px; }
+.session-state { min-height: 100dvh; display: grid; align-content: center; justify-items: center; gap: 12px; background: #f4f9fe; color: #16365c; padding: 24px; text-align: center; }
+.session-state button { background: #1687e8; color: white; border: 0; border-radius: 7px; padding: 12px 20px; }

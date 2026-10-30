@@ -1,0 +1,40 @@
+import { ChevronRight, CircleCheck, Filter, MapPin, Search, SlidersHorizontal } from "lucide-react";
+import {useEffect,useState,type ReactNode} from "react";
+import {StatusPill} from '../../components/PortalUi';
+import {request} from '../../services/enforcementApi';
+import {AdminCaseControls,BackupButtons} from "./AdminCaseControls";
+import type { EnforcementCase } from "../../types";
+import {CaseSurveyDetails} from "./CaseSurveyDetails";
+import { CaseLocation } from "./CaseLocation";
+import { canVerifyCase, canApproveCcuc } from "./caseWorkflow";
+
+type Props={advancedFilters?:ReactNode;initialArchiveScope?:'active'|'archived'|'all';cases:EnforcementCase[];query:string;node:string;stage:string;role:string;onQuery:(v:string)=>void;onNode:(v:string)=>void;onStage:(v:string)=>void;onOpen:(c:EnforcementCase)=>void;onCaseChanged?:(item:EnforcementCase|null,key:string)=>void;onNotify?:(message:string)=>void};
+
+export function CaseRegister(p:Props){
+ const [dueSoonDays,setDueSoonDays]=useState(3);
+ useEffect(()=>{request<{dueSoonDays:number}>('/workflow/settings').then(s=>setDueSoonDays(s.dueSoonDays)).catch(()=>{});},[]);
+ const [advanced,setAdvanced]=useState({sector:'',plot:'',survey:'',section:'',officer:'',from:'',to:'',state:'All'});
+ const filtered=p.cases.filter(c=>(!advanced.sector||c.sector?.toLowerCase().includes(advanced.sector.toLowerCase()))&&(!advanced.plot||c.plotNumber?.toLowerCase().includes(advanced.plot.toLowerCase()))&&(!advanced.survey||c.survey.toLowerCase().includes(advanced.survey.toLowerCase()))&&(!advanced.section||c.applicableSections?.includes(advanced.section))&&(!advanced.officer||c.officer.toLowerCase().includes(advanced.officer.toLowerCase()))&&(!advanced.from||c.createdAt&&new Date(c.createdAt)>=new Date(advanced.from))&&(!advanced.to||c.createdAt&&new Date(c.createdAt)<new Date(new Date(advanced.to).getTime()+86400000))&&(advanced.state==='All'||advanced.state==='Overdue'&&(c.overdueDays??0)>0||advanced.state==='Escalated'&&Boolean(c.escalatedAt)||advanced.state==='Completed'&&c.status==='Closed'||advanced.state==='Pending'&&c.status!=='Closed'||advanced.state==='Due soon'&&c.nextActionAt&&new Date(c.nextActionAt)>new Date()&&new Date(c.nextActionAt).getTime()-Date.now()<=dueSoonDays*86400000));
+ const advancedFilters=<details className="portal-filter-panel"><summary><Filter size={15}/> Advanced case filters<span>Property, responsibility and deadlines</span><SlidersHorizontal size={15}/></summary><div className="portal-filter-grid">{Object.entries(advanced).map(([key,value])=><label className="portal-field" key={key}>{({state:'Deadline / completion',sector:'Sector',plot:'Plot number',survey:'Survey number',section:'Legal section',officer:'Responsible officer',from:'Registered from',to:'Registered to'} as Record<string,string>)[key]}{key==='state'?<select value={value} onChange={e=>setAdvanced({...advanced,[key]:e.target.value})}>{['All','Overdue','Due soon','Pending','Escalated','Completed'].map(o=><option key={o}>{o}</option>)}</select>:<input type={['from','to'].includes(key)?'date':'text'} value={value} onChange={e=>setAdvanced({...advanced,[key]:e.target.value})} placeholder="Any"/>}</label>)}<div className="portal-filter-actions"><button className="action-secondary" onClick={()=>setAdvanced({sector:'',plot:'',survey:'',section:'',officer:'',from:'',to:'',state:'All'})}>Clear advanced filters</button></div></div></details>;
+ return <CaseRegisterBody {...p} cases={filtered} advancedFilters={advancedFilters}/>;
+}
+function CaseRegisterBody(p:Props){
+ const [archiveScope,setArchiveScope]=useState<string>(p.initialArchiveScope??"active");
+ const shown=p.cases.filter(item=>p.role!=="master"?!item.archived:archiveScope==="all"||Boolean(item.archived)===(archiveScope==="archived"));
+ const active=shown.filter(item=>!item.archived&&item.status!=="Closed").length,overdue=shown.filter(item=>(item.overdueDays??0)>0).length,holds=shown.filter(item=>item.legal).length;
+ const nodes=[...new Set(p.cases.map(item=>item.node).filter(item=>item&&item!=="Unassigned"))];
+ const canVerify=(c:EnforcementCase)=>canVerifyCase(c,p.role);
+ return <div className="register-scene">
+  <section className="register-head"><div><span className="section-index">WORKING REGISTER</span><h2>{archiveScope==="archived"?"Archived cases":"Enforcement cases"}</h2><p>{shown.length} case record{shown.length===1?"":"s"} in the current view</p></div><div className="register-tally"><span>ACTIVE<strong>{active}</strong></span><span>OVERDUE<strong className="red-text">{overdue}</strong></span><span>LEGAL HOLD<strong>{holds}</strong></span></div></section>
+  {p.role==="master"&&<section className="admin-register-toolbar"><label>Case view<select value={archiveScope} onChange={event=>setArchiveScope(event.target.value)}><option value="active">Active cases</option><option value="archived">Archived cases</option><option value="all">All cases</option></select></label><BackupButtons onNotify={p.onNotify??(()=>{})}/></section>}
+  <section className="filter-studio"><label className="smart-search"><Search size={16}/><input aria-label="Search case register" value={p.query} onChange={e=>p.onQuery(e.target.value)} placeholder="Search by case, property, owner or survey"/></label><div className="filter-controls"><select aria-label="Filter by node" value={p.node} onChange={e=>p.onNode(e.target.value)}><option>All nodes</option>{nodes.map(x=><option key={x}>{x}</option>)}</select><select aria-label="Filter by stage" value={p.stage} onChange={e=>p.onStage(e.target.value)}><option>All stages</option>{[...new Set(p.cases.map(x=>x.stage))].map(x=><option key={x}>{x}</option>)}</select><button onClick={()=>{p.onNode("All nodes");p.onStage("All stages");p.onQuery("")}}><SlidersHorizontal size={14}/> Reset filters</button></div></section>
+  {p.advancedFilters}
+  <section className="register-table modern-register">
+   {shown.length?<div className="portal-table-scroll" tabIndex={0} role="region" aria-label="Enforcement case records"><table className="portal-table"><thead><tr><th>Case & property</th><th>Node</th><th>Current stage</th><th>Responsible officer</th><th>Next action</th><th>Status</th><th>Actions</th></tr></thead><tbody>{shown.flatMap(c=>[
+    <tr key={c.id} className="register-primary-row"><td><button className="case-open-link" onClick={()=>p.onOpen(c)}>{c.id}<ChevronRight size={13}/></button><strong className="register-property">{c.property}</strong><small>{c.owner}</small>{c.archived&&<small className="archive-badge">Archived {c.archiveUntil?`until ${new Date(c.archiveUntil).toLocaleDateString("en-IN",{timeZone:"Asia/Kolkata"})}`:"forever"}</small>}</td><td>{c.node}</td><td><span className="register-stage">{c.stage.replace(/^\d+\.\s*/,"")}</span></td><td>{c.officer}</td><td className={(c.overdueDays??0)>0?"red-text":""}>{c.updated}</td><td><StatusPill tone={c.legal?'red':c.status==='Closed'?'green':(c.overdueDays??0)>0?'amber':'blue'}>{c.legal?'Legal restriction':c.status}</StatusPill></td><td><div className="register-row-actions"><button className="action-secondary" onClick={()=>p.onOpen(c)}>{canVerify(c)||canApproveCcuc(c,p.role)?<><CircleCheck size={13}/>{canVerify(c)?'Verify case':'Approve case'}</>:<>Open case<ChevronRight size={13}/></>}</button>{p.role==="master"&&<AdminCaseControls item={c} compact onChanged={item=>p.onCaseChanged?.(item,c.caseKey??c.id)} onNotify={p.onNotify??(()=>{})}/>}</div></td></tr>,
+    <tr key={c.id+'-survey'} className="register-expansion-row"><td colSpan={7}><details className="survey-row-expander"><summary><MapPin size={13}/><span>Survey & location details</span><span className="register-survey-ref">{c.survey} · {c.notice}</span><ChevronRight size={13}/></summary><CaseSurveyDetails item={c} compact/><div className="register-location"><CaseLocation item={c}/></div></details></td></tr>
+   ])}</tbody></table></div>:<div className="register-empty"><Search size={25}/><h3>No matching cases</h3><p>Try another search or adjust the filters to find a case.</p></div>}
+   <footer><span>Showing {shown.length} case record{shown.length===1?"":"s"}</span></footer>
+  </section>
+ </div>;
+}

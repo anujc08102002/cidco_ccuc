@@ -1,0 +1,17 @@
+from pathlib import Path
+p=Path('src/features/workspaces/WorkspacePage.tsx');s=p.read_text()
+s="import {PasswordDelivery} from './PasswordDelivery';\n"+s
+s=s.replace('username:string;name:string;', 'username:string;email?:string|null;name:string;',1)
+s=s.replace('export function WorkspacePage({role,onNotify}', 'export function WorkspacePage({role,onNotify,focusUserId}')
+s=s.replace(";role:string;onAction:", ";role:string;focusUserId?:string|null;onAction:",1)
+s=s.replace("username:'',name:'',password:'',role:'surveyor'", "username:'',email:'',name:'',password:'',role:'surveyor'")
+s=s.replace(" const [deleteUser,setDeleteUser]", " const [delivery,setDelivery]=useState<{user:UserItem;password:string}|null>(null);\n const [deleteUser,setDeleteUser]",1)
+s=s.replace('useEffect(()=>{void load();},[]);', "useEffect(()=>{void load();const changed=()=>void load();window.addEventListener('enforcement:changed',changed);return()=>window.removeEventListener('enforcement:changed',changed);},[]);\n useEffect(()=>{if(focusUserId){const user=users.find(u=>u.id===focusUserId);if(user)setQuery(user.username);}},[focusUserId,users]);")
+s=s.replace('await enforcementApi.updateUser(resetUser.id,{password:resetPassword});setResetUser(null);', 'const updated=await enforcementApi.updateUser(resetUser.id,{password:resetPassword}) as UserItem;setDelivery({user:{...resetUser,...updated},password:resetPassword});setResetUser(null);')
+s=s.replace('`${u.name} ${u.username} ${u.label}`', '`${u.name} ${u.username} ${u.email??\'\'} ${u.label}`')
+s=s.replace('  {deleteUser&&', '  {delivery&&<PasswordDelivery user={delivery.user} password={delivery.password} onClose={()=>setDelivery(null)}/>}\n  {deleteUser&&',1)
+s=s.replace('<label className="portal-field">Role<select', '<label className="portal-field">Official email address<input type="email" required maxLength={254} autoComplete="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label><label className="portal-field">Role<select',1)
+s=s.replace('<b>{resetUser.name}</b>. Existing sessions', '<b>{resetUser.name} ({resetUser.username})</b> · {resetUser.email||\'No registered email\'}. Existing sessions',1)
+s=s.replace('<small>{user.username}</small></td>', '<small>{user.username}</small><small>{user.email||\'Email not registered — add using Edit\'}</small></td>',1)
+s=s.replace('setResetUser(user);setResetPassword', 'setDelivery(null);setResetUser(user);setResetPassword',1)
+p.write_text(s)

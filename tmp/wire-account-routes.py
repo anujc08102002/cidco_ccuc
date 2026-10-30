@@ -1,0 +1,3 @@
+from pathlib import Path
+p=Path('server/index.js');s=p.read_text(encoding='utf-8').replace("import dotenv from 'dotenv';", "import dotenv from 'dotenv';\nimport {registerAccountWorkspaceRoutes} from './account-workspace.js';");s=s.replace('registerWorkflowRoutes(app,{getPool,publishChange,toUiCase});','registerWorkflowRoutes(app,{getPool,publishChange,toUiCase});\nregisterAccountWorkspaceRoutes(app,{getPool,publishChange});');p.write_text(s,encoding='utf-8')
+p=Path('shared/account-preferences.js');s=p.read_text(encoding='utf-8').replace('!(key in defaults)', '!Object.prototype.hasOwnProperty.call(defaults,key)');p.write_text(s,encoding='utf-8')

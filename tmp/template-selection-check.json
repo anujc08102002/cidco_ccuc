@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "oneSignatureRegion": true,
+  "designerCoordinatesMatch": true,
+  "duplicateNamesSelectById": true,
+  "uploadedArtworkRetained": true,
+  "rapidSwitchKeepsSelectedTemplate": true,
+  "mismatchedPreviewRejected": true
+}
